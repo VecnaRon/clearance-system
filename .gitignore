@@ -1,0 +1,78 @@
+# ==============================
+# Android / Kotlin
+# ==============================
+
+.gradle/
+**/build/
+local.properties
+**/local.properties
+
+.idea/
+*.iml
+.kotlin/
+
+.externalNativeBuild/
+.cxx/
+
+captures/
+
+# Android Studio generated files
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# APK / AAB files
+*.apk
+*.aab
+
+# ==============================
+# Kotlin
+# ==============================
+
+.kotlin/
+
+# ==============================
+# Node.js / Web
+# ==============================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+out/
+
+# ==============================
+# IDE / OS
+# ==============================
+
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ==============================
+# Logs
+# ==============================
+
+*.log
+logs/
+
+# ==============================
+# Temporary files
+# ==============================
+
+*.tmp
+*.temp
+*.swp

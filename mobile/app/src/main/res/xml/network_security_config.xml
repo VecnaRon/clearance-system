@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        This app talks to your LOCAL development backend over plain
+        HTTP (no SSL/TLS certificate), e.g. http://10.0.2.2:5000/ or
+        http://192.168.100.6:5000/.
+
+        Starting with Android 9 (API 28), cleartext (non-HTTPS) traffic
+        is BLOCKED by default. Without this file, every API call would
+        fail with "CLEARTEXT communication not permitted".
+
+        This config allows cleartext for local development only.
+        Before shipping this app to production, put your backend
+        behind HTTPS and delete this file (and the
+        android:networkSecurityConfig line in AndroidManifest.xml).
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
