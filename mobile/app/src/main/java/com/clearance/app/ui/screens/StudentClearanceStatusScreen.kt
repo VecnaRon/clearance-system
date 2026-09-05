@@ -1,6 +1,11 @@
 package com.clearance.app.ui.screens
 
+import android.content.Context
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +34,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -66,6 +77,42 @@ fun StudentClearanceStatusScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState = viewModel.uiState
+    val context = LocalContext.current
+
+    // PROXIMITY-BASED PRIVACY MODE (Phase 2).
+    // Registered only while this screen is composed; unregistered on
+    // dispose. State only flips on an actual near/far transition
+    // (guarded inside the listener) to avoid flicker from repeated
+    // identical sensor events. Purely local UI state — no data is
+    // cleared, no API call is made, no backend/database is touched.
+    var isPrivacyModeActive by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        var lastIsNear: Boolean? = null
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val maxRange = proximitySensor?.maximumRange ?: event.values[0]
+                val currentlyNear = event.values[0] < maxRange
+                if (currentlyNear != lastIsNear) {
+                    lastIsNear = currentlyNear
+                    isPrivacyModeActive = currentlyNear
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) { /* not needed */ }
+        }
+
+        if (proximitySensor != null) {
+            sensorManager.registerListener(listener, proximitySensor, SensorManager.SENSOR_DELAY_UI)
+        }
+
+        onDispose {
+            sensorManager.unregisterListener(listener)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -133,6 +180,7 @@ fun StudentClearanceStatusScreen(
                     downloadError = uiState.downloadError,
                     downloadedFileUri = uiState.downloadedFileUri,
                     onDownloadCertificate = viewModel::downloadCertificate,
+                    isPrivacyModeActive = isPrivacyModeActive,
                     modifier = Modifier.fillMaxSize().padding(innerPadding)
                 )
             }
@@ -148,14 +196,12 @@ private fun StatusContent(
     downloadError: String?,
     downloadedFileUri: Uri?,
     onDownloadCertificate: () -> Unit,
+    isPrivacyModeActive: Boolean,
     modifier: Modifier
 ) {
     val departments = clearance.departments ?: emptyList()
     val clearedCount = departments.count { it.status == "approved" }
     val totalCount = departments.size
-
-    // AI CLEARANCE ADVISOR: pure local computation over data this
-    // screen already loaded — no network call, no external AI API.
     val aiResult = AIAdvisorEngine.analyze(clearance, records)
 
     Column(
@@ -165,24 +211,68 @@ private fun StatusContent(
     ) {
         HeaderCard()
         Spacer(modifier = Modifier.height(16.dp))
-        InfoAndAlertsCard(
-            clearance = clearance,
-            clearedCount = clearedCount,
-            totalCount = totalCount,
-            isDownloadingCertificate = isDownloadingCertificate,
-            downloadError = downloadError,
-            downloadedFileUri = downloadedFileUri,
-            onDownloadCertificate = onDownloadCertificate
-        )
-        if (aiResult != null) {
+
+        if (isPrivacyModeActive) {
+            PrivacyModeCard()
+        } else {
+            InfoAndAlertsCard(
+                clearance = clearance,
+                clearedCount = clearedCount,
+                totalCount = totalCount,
+                isDownloadingCertificate = isDownloadingCertificate,
+                downloadError = downloadError,
+                downloadedFileUri = downloadedFileUri,
+                onDownloadCertificate = onDownloadCertificate
+            )
+            if (aiResult != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                AIAdvisorCard(aiResult)
+            }
             Spacer(modifier = Modifier.height(16.dp))
-            AIAdvisorCard(aiResult)
+            OutstandingItemsCard(records)
+            if (departments.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                DepartmentDetailsCard(departments)
+            }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        OutstandingItemsCard(records)
-        if (departments.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            DepartmentDetailsCard(departments)
+    }
+}
+
+/** Shown instead of all sensitive clearance content while proximity reports NEAR. */
+@Composable
+private fun PrivacyModeCard() {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = "\uD83D\uDD12", fontSize = 40.sp)
+            Text(
+                text = "Privacy Mode",
+                color = ClearanceTextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+            Text(
+                text = "Clearance information is temporarily hidden because the proximity sensor detected an object near the device.",
+                color = ClearanceTextSecondary,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp)
+            )
+            Text(
+                text = "Move your hand away to continue.",
+                color = ClearanceTextMuted,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
     }
 }
